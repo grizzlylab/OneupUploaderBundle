@@ -3,6 +3,7 @@
 namespace Oneup\UploaderBundle\Uploader\Storage;
 
 use League\Flysystem\File;
+use League\Flysystem\Plugin\ListFiles;
 use Oneup\UploaderBundle\Uploader\Chunk\Storage\FlysystemStorage as ChunkStorage;
 use Oneup\UploaderBundle\Uploader\File\FileInterface;
 use Oneup\UploaderBundle\Uploader\File\FlysystemFile;
@@ -19,7 +20,7 @@ class FlysystemOrphanageStorage extends FlysystemStorage implements OrphanageSto
     /**
      * @param StorageInterface      $storage
      * @param SessionInterface      $session
-     * @param ChunkStorage $chunkStorage This class is only used if the gaufrette chunk storage is used.
+     * @param ChunkStorage          $chunkStorage This class is only used if the gaufrette chunk storage is used.
      * @param                       $config
      * @param                       $type
      */
@@ -40,7 +41,7 @@ class FlysystemOrphanageStorage extends FlysystemStorage implements OrphanageSto
 
     public function upload(FileInterface $file, $name, $path = null)
     {
-        if(!$this->session->isStarted())
+        if (!$this->session->isStarted())
             throw new \RuntimeException('You need a running session in order to run the Orphanage.');
 
         return parent::upload($file, $name, $this->getPath());
@@ -69,12 +70,24 @@ class FlysystemOrphanageStorage extends FlysystemStorage implements OrphanageSto
         }
     }
 
+    /**
+     * Modified by GrizzlyLab
+     * @return array
+     */
     public function getFiles()
     {
-        $keys = $this->chunkStorage->getFilesystem()->listFiles($this->getPath());
-        $keys = $keys['keys'];
-        $files = array();
+        // add plugin to make it work
+        $this->chunkStorage->getFilesystem()->addPlugin(new ListFiles());
 
+        // files from filesystem
+        $files = $this->chunkStorage->getFilesystem()->listFiles($this->getPath());
+        $keys = [];
+        foreach ($files as $file) {
+            $keys[] = $file['path'];
+        }
+
+        // create some FlysystemFile
+        $files = array();
         foreach ($keys as $key) {
             // gotta pass the filesystem to both as you can't get it out from one..
             $files[$key] = new FlysystemFile(new File($this->chunkStorage->getFilesystem(), $key), $this->chunkStorage->getFilesystem());

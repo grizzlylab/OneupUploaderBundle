@@ -9,7 +9,6 @@ use Symfony\Component\Filesystem\Filesystem as LocalFilesystem;
 
 class FlysystemStorage implements StorageInterface
 {
-
     /**
      * @var null|string
      */
@@ -45,7 +44,7 @@ class FlysystemStorage implements StorageInterface
         }
 
         $stream = fopen($file->getPathname(), 'r+');
-        $this->filesystem->putStream($name, $stream);
+        $this->filesystem->putStream($path, $stream);
         if (is_resource($stream)) {
             fclose($stream);
         }
