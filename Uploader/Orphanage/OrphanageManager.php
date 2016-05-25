@@ -29,9 +29,9 @@ class OrphanageManager
 
     public function clear()
     {
-        // Really ugly solution to clearing the orphanage on gaufrette
+        // Really ugly solution to clearing the orphanage on gaufrette/flysystem
         $class = $this->container->getParameter('oneup_uploader.orphanage.class');
-        if ($class === 'Oneup\UploaderBundle\Uploader\Storage\GaufretteOrphanageStorage') {
+        if ($class === 'Oneup\UploaderBundle\Uploader\Storage\GaufretteOrphanageStorage' || $class === 'Oneup\UploaderBundle\Uploader\Storage\FlysystemOrphanageStorage') {
             $chunkStorage = $this->container->get('oneup_uploader.chunks_storage');
             $chunkStorage->clear($this->config['maxage'], $this->config['directory']);
 

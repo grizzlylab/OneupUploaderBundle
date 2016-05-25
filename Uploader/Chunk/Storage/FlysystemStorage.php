@@ -1,6 +1,8 @@
 <?php
 namespace Oneup\UploaderBundle\Uploader\Chunk\Storage;
 
+use League\Flysystem\Plugin\ListFiles;
+use League\Flysystem\Plugin\ListPaths;
 use Oneup\UploaderBundle\Uploader\File\FlysystemFile;
 use League\Flysystem\Filesystem;
 use Symfony\Component\HttpFoundation\File\UploadedFile;
@@ -22,9 +24,9 @@ class FlysystemStorage implements ChunkStorageInterface
     public function __construct(Filesystem $filesystem, $bufferSize, $streamWrapperPrefix, $prefix)
     {
         if (
-            ! method_exists($filesystem, 'readStream')
+            !method_exists($filesystem, 'readStream')
             ||
-            ! method_exists($filesystem, 'putStream')
+            !method_exists($filesystem, 'putStream')
         ) {
             throw new \InvalidArgumentException('The filesystem used as chunk storage must streamable');
         }
@@ -37,8 +39,10 @@ class FlysystemStorage implements ChunkStorageInterface
 
     public function clear($maxAge, $prefix = null)
     {
-        $prefix = $prefix ? :$this->prefix;
-        $matches = $this->filesystem->listFiles($prefix);
+        $this->filesystem->addPlugin(new ListFiles());
+        $this->filesystem->addPlugin(new ListPaths());
+
+        $prefix = $prefix ?: $this->prefix;
 
         $now = time();
         $toDelete = array();
@@ -47,24 +51,28 @@ class FlysystemStorage implements ChunkStorageInterface
         // this also means the files inside are old
         // but after the files are deleted the dirs
         // would remain
-        foreach ($matches['dirs'] as $key) {
-            if ($maxAge <= $now-$this->filesystem->getTimestamp($key)) {
-                $toDelete[] = $key;
-            }
-        }
-        // The same directory is returned for every file it contains
-        array_unique($toDelete);
-        foreach ($matches['keys'] as $key) {
-            if ($maxAge <= $now-$this->filesystem->getTimestamp($key)) {
-                $this->filesystem->delete($key);
+        foreach ($this->filesystem->listPaths($prefix) as $path) {
+            if ($maxAge <= $now - $this->filesystem->getTimestamp($path)) {
+                $toDelete[] = $path;
             }
         }
 
-        foreach ($toDelete as $key) {
+        // Delete old files
+        foreach ($this->filesystem->listFiles($prefix, true) as $file) {
+            $path = $file['path'];
+            if ($maxAge <= $now - $this->filesystem->getTimestamp($path)) {
+                $this->filesystem->delete($path);
+            }
+        }
+
+        // Finally remove directories
+        foreach ($toDelete as $path) {
             // The filesystem will throw exceptions if
             // a directory is not empty
+            // or if a directory doesn't exist anymore
+            // e.g. Amazon S3 automatically removes a directory when deleting its files)
             try {
-                $this->filesystem->delete($key);
+                $this->filesystem->delete($path);
             } catch (\Exception $e) {
                 continue;
             }
@@ -135,8 +143,15 @@ class FlysystemStorage implements ChunkStorageInterface
 
     public function getChunks($uuid)
     {
+        $this->filesystem->addPlugin(new ListFiles());
         $results = $this->filesystem->listFiles($this->prefix.'/'.$uuid);
-        return preg_grep('/^.+\/(\d+)_/', $results['keys']);
+
+        $paths = array();
+        foreach ($results as $result) {
+            $paths[] = $result['path'];
+        }
+
+        return preg_grep('/^.+\/(\d+)_/', $paths);
     }
 
     public function getFilesystem()
